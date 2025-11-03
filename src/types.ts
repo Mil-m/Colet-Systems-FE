@@ -1,6 +1,7 @@
 export interface Bet {
     id: number;
     bookie: string | null;
+    bookie_description: any;
     customer_id: number | null;
     customer_name?: string | null;
     event_id: number | null;

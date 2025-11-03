@@ -1,0 +1,184 @@
+import React, { useState } from "react";
+import {
+    Table,
+    TableHead,
+    TableRow,
+    TableCell,
+    TableBody,
+    Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+} from "@mui/material";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "../api";
+
+interface Customer {
+    id: number;
+    username: string;
+    real_name?: string | null;
+    currency: string;
+    balance_amount: number;
+}
+
+export const CustomersTable: React.FC = () => {
+    const queryClient = useQueryClient();
+
+    const { data, isLoading } = useQuery({
+        queryKey: ["customers"],
+        queryFn: async () => {
+            const res = await api.get<Customer[]>("/customers/");
+            return res.data;
+        },
+    });
+
+    const [open, setOpen] = useState(false);
+    const [username, setUsername] = useState("");
+    const [realName, setRealName] = useState("");
+    const [currency, setCurrency] = useState("USD");
+    const [balance, setBalance] = useState("0");
+
+    const createMutation = useMutation({
+        mutationFn: async () =>
+            api.post("/customers/", {
+                username,
+                real_name: realName || null,
+                currency,
+                balance_amount: Number(balance),
+            }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["customers"] });
+            setOpen(false);
+            setUsername("");
+            setRealName("");
+            setCurrency("USD");
+            setBalance("0");
+        },
+        onError: (err: any) => {
+            const backendDetail =
+                err?.response?.data?.detail ??
+                err?.response?.data?.message ??
+                err?.message ??
+                "Failed to create customer";
+            if (typeof backendDetail === "string") {
+                alert(backendDetail);
+            } else {
+                alert(JSON.stringify(backendDetail, null, 2));
+            }
+        },
+    });
+
+    const handleDelete = async (id: number) => {
+        if (!window.confirm("Delete customer?")) return;
+        try {
+            await api.delete(`/customers/${id}`);
+            queryClient.invalidateQueries({ queryKey: ["customers"] });
+        } catch (err: any) {
+            alert(err?.response?.data?.detail || "Delete failed");
+        }
+    };
+
+    return (
+        <div style={{ padding: 24 }}>
+            <h2>Customers</h2>
+
+            <Button variant="contained" onClick={() => setOpen(true)}>
+                Add customer
+            </Button>
+
+            <Table sx={{ marginTop: 2 }}>
+                <TableHead>
+                    <TableRow>
+                        <TableCell>ID</TableCell>
+                        <TableCell>Username</TableCell>
+                        <TableCell>Real name</TableCell>
+                        <TableCell>Currency</TableCell>
+                        <TableCell>Balance</TableCell>
+                        <TableCell>Actions</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {isLoading && (
+                        <TableRow>
+                            <TableCell colSpan={6}>Loading...</TableCell>
+                        </TableRow>
+                    )}
+
+                    {!isLoading &&
+                        data?.map((c) => (
+                            <TableRow key={c.id}>
+                                <TableCell>{c.id}</TableCell>
+                                <TableCell>{c.username}</TableCell>
+                                <TableCell>{c.real_name || "—"}</TableCell>
+                                <TableCell>{c.currency}</TableCell>
+                                <TableCell>{c.balance_amount}</TableCell>
+                                <TableCell>
+                                    <Button size="small" color="error" onClick={() => handleDelete(c.id)}>
+                                        DELETE
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+
+                    {!isLoading && data && data.length === 0 && (
+                        <TableRow>
+                            <TableCell colSpan={6}>No customers</TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+
+            <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Add customer</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        label="Username"
+                        fullWidth
+                        margin="dense"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                    />
+                    <TextField
+                        label="Real name"
+                        fullWidth
+                        margin="dense"
+                        value={realName}
+                        onChange={(e) => setRealName(e.target.value)}
+                    />
+                    <FormControl fullWidth margin="dense">
+                        <InputLabel>Currency</InputLabel>
+                        <Select label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                            <MenuItem value="USD">USD</MenuItem>
+                            <MenuItem value="EUR">EUR</MenuItem>
+                            <MenuItem value="GBP">GBP</MenuItem>
+                        </Select>
+                    </FormControl>
+                    <TextField
+                        label="Balance amount"
+                        type="number"
+                        fullWidth
+                        margin="dense"
+                        value={balance}
+                        onChange={(e) => setBalance(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button
+                        onClick={() => createMutation.mutate()}
+                        variant="contained"
+                        disabled={createMutation.isPending || !username.trim()}
+                    >
+                        Create
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </div>
+    );
+};
