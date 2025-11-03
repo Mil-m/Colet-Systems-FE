@@ -15,6 +15,8 @@ import {
     Select,
     InputLabel,
     FormControl,
+    CircularProgress,
+    Autocomplete,
 } from "@mui/material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
@@ -29,15 +31,34 @@ interface EventItem {
     status: string;
 }
 
+interface Competition {
+    id: number;
+    name: string;
+    sport: string;
+}
+
+interface Team {
+    id: number;
+    name: string;
+    sport: string;
+}
+
 interface EventsResponse {
     items: EventItem[];
     total: number;
 }
 
+const makeDefaultDate = () =>
+    new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16);
+
 export const EventsTable: React.FC = () => {
     const queryClient = useQueryClient();
 
-    const { data, isLoading, error } = useQuery({
+    const {
+        data: eventsData,
+        isLoading: loadingEvents,
+        error: eventsError,
+    } = useQuery({
         queryKey: ["events"],
         queryFn: async () => {
             const res = await api.get<EventsResponse>("/events/");
@@ -45,31 +66,89 @@ export const EventsTable: React.FC = () => {
         },
     });
 
+    const {
+        data: competitions,
+        isLoading: loadingCompetitions,
+    } = useQuery({
+        queryKey: ["competitions"],
+        queryFn: async () => (await api.get<Competition[]>("/competitions/")).data,
+    });
+
+    const { data: teams, isLoading: loadingTeams } = useQuery({
+        queryKey: ["teams"],
+        queryFn: async () => (await api.get<Team[]>("/teams/")).data,
+    });
+
     const [search, setSearch] = useState("");
     const [open, setOpen] = useState(false);
-    const [date, setDate] = useState(new Date().toISOString().slice(0, 16));
-    const [competitionId, setCompetitionId] = useState("");
-    const [teamAId, setTeamAId] = useState("");
-    const [teamBId, setTeamBId] = useState("");
+    const [date, setDate] = useState(makeDefaultDate);
+    const [competitionId, setCompetitionId] = useState<string>("");
+    const [teamAId, setTeamAId] = useState<string>("");
+    const [teamBId, setTeamBId] = useState<string>("");
     const [status, setStatus] = useState("prematch");
+    const [formError, setFormError] = useState<string | null>(null);
+
+    const selectedCompetition = competitions?.find(
+        (c) => c.id === Number(competitionId)
+    );
+    const competitionSport = selectedCompetition?.sport;
+
+    const filteredTeams: Team[] = useMemo(() => {
+        if (!teams) return [];
+        if (!competitionSport) return teams;
+        return teams.filter((t) => t.sport === competitionSport);
+    }, [teams, competitionSport]);
+
+    const filteredEvents = useMemo(() => {
+        const q = search.toLowerCase().trim();
+        const items = eventsData?.items || [];
+        if (!q) return items;
+        return items.filter((ev) => {
+            return (
+                String(ev.id).includes(q) ||
+                String(ev.competition_id).includes(q) ||
+                String(ev.team_a_id).includes(q) ||
+                String(ev.team_b_id).includes(q) ||
+                ev.status.toLowerCase().includes(q)
+            );
+        });
+    }, [eventsData, search]);
+
+    const isCreateDisabled =
+        !date ||
+        !competitionId ||
+        !teamAId ||
+        !teamBId ||
+        loadingCompetitions ||
+        loadingTeams;
 
     const createMutation = useMutation({
-        mutationFn: async () =>
-            api.post("/events/", {
+        mutationFn: async () => {
+            setFormError(null);
+            return api.post("/events/", {
                 date: new Date(date).toISOString(),
                 competition_id: Number(competitionId),
                 team_a_id: Number(teamAId),
                 team_b_id: Number(teamBId),
                 status,
-            }),
+            });
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["events"] });
             setOpen(false);
-            setDate(new Date().toISOString().slice(0, 16));
+            setDate(makeDefaultDate());
             setCompetitionId("");
             setTeamAId("");
             setTeamBId("");
             setStatus("prematch");
+            setFormError(null);
+        },
+        onError: (err: any) => {
+            const msg =
+                err?.response?.data?.detail ||
+                err?.message ||
+                "Failed to create event";
+            setFormError(msg);
         },
     });
 
@@ -82,25 +161,6 @@ export const EventsTable: React.FC = () => {
             alert(err?.response?.data?.detail || "Delete failed");
         }
     };
-
-    const filtered = useMemo(() => {
-        const q = search.toLowerCase().trim();
-        if (!q) return data?.items || [];
-        return (data?.items || []).filter((ev) => {
-            const idStr = String(ev.id);
-            const compStr = String(ev.competition_id);
-            const teamAStr = String(ev.team_a_id);
-            const teamBStr = String(ev.team_b_id);
-            const statusStr = ev.status.toLowerCase();
-            return (
-                idStr.includes(q) ||
-                compStr.includes(q) ||
-                teamAStr.includes(q) ||
-                teamBStr.includes(q) ||
-                statusStr.includes(q)
-            );
-        });
-    }, [data, search]);
 
     return (
         <div className="admin-page">
@@ -119,51 +179,65 @@ export const EventsTable: React.FC = () => {
                 </Button>
             </div>
 
-            {error && <div style={{ color: "red", marginBottom: 12 }}>Failed to load events</div>}
+            {eventsError && (
+                <div style={{ color: "red", marginBottom: 12 }}>
+                    Failed to load events
+                </div>
+            )}
 
             <Table className="admin-table">
                 <TableHead>
                     <TableRow>
                         <TableCell>ID</TableCell>
                         <TableCell>Date</TableCell>
-                        <TableCell>Competition ID</TableCell>
-                        <TableCell>Team A ID</TableCell>
-                        <TableCell>Team B ID</TableCell>
+                        <TableCell>Competition</TableCell>
+                        <TableCell>Team A</TableCell>
+                        <TableCell>Team B</TableCell>
                         <TableCell>Status</TableCell>
                         <TableCell width={100}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {isLoading && (
+                    {loadingEvents && (
                         <TableRow>
                             <TableCell colSpan={7}>Loading...</TableCell>
                         </TableRow>
                     )}
 
-                    {!isLoading &&
-                        filtered.map((ev) => (
-                            <TableRow key={ev.id}>
-                                <TableCell>{ev.id}</TableCell>
-                                <TableCell>{new Date(ev.date).toLocaleString()}</TableCell>
-                                <TableCell>{ev.competition_id}</TableCell>
-                                <TableCell>{ev.team_a_id}</TableCell>
-                                <TableCell>{ev.team_b_id}</TableCell>
-                                <TableCell>{ev.status}</TableCell>
-                                <TableCell>
-                                    <div className="admin-actions">
-                                        <Button
-                                            size="small"
-                                            className="admin-action admin-action--danger"
-                                            onClick={() => handleDelete(ev.id)}
-                                        >
-                                            DELETE
-                                        </Button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                    {!loadingEvents &&
+                        filteredEvents.map((ev) => {
+                            const compName =
+                                competitions?.find((c) => c.id === ev.competition_id)?.name ||
+                                ev.competition_id;
+                            const teamAName =
+                                teams?.find((t) => t.id === ev.team_a_id)?.name || ev.team_a_id;
+                            const teamBName =
+                                teams?.find((t) => t.id === ev.team_b_id)?.name || ev.team_b_id;
 
-                    {!isLoading && filtered.length === 0 && (
+                            return (
+                                <TableRow key={ev.id}>
+                                    <TableCell>{ev.id}</TableCell>
+                                    <TableCell>{new Date(ev.date).toLocaleString()}</TableCell>
+                                    <TableCell>{compName}</TableCell>
+                                    <TableCell>{teamAName}</TableCell>
+                                    <TableCell>{teamBName}</TableCell>
+                                    <TableCell>{ev.status}</TableCell>
+                                    <TableCell>
+                                        <div className="admin-actions">
+                                            <Button
+                                                size="small"
+                                                className="admin-action admin-action--danger"
+                                                onClick={() => handleDelete(ev.id)}
+                                            >
+                                                DELETE
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+
+                    {!loadingEvents && filteredEvents.length === 0 && (
                         <TableRow>
                             <TableCell colSpan={7}>No events</TableCell>
                         </TableRow>
@@ -173,7 +247,7 @@ export const EventsTable: React.FC = () => {
 
             <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Add event</DialogTitle>
-                <DialogContent>
+                <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
                     <TextField
                         label="Date"
                         type="datetime-local"
@@ -183,43 +257,112 @@ export const EventsTable: React.FC = () => {
                         onChange={(e) => setDate(e.target.value)}
                         InputLabelProps={{ shrink: true }}
                     />
-                    <TextField
-                        label="Competition ID"
-                        fullWidth
-                        margin="dense"
-                        value={competitionId}
-                        onChange={(e) => setCompetitionId(e.target.value)}
+
+                    <Autocomplete
+                        options={competitions || []}
+                        loading={loadingCompetitions}
+                        getOptionLabel={(option) => option.name || ""}
+                        value={
+                            competitions?.find((c) => c.id === Number(competitionId)) || null
+                        }
+                        onChange={(_, v) => {
+                            setCompetitionId(v ? String(v.id) : "");
+                            setTeamAId("");
+                            setTeamBId("");
+                        }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                label="Competition"
+                                margin="dense"
+                                InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                        <>
+                                            {loadingCompetitions ? (
+                                                <CircularProgress size={16} />
+                                            ) : null}
+                                            {params.InputProps.endAdornment}
+                                        </>
+                                    ),
+                                }}
+                            />
+                        )}
                     />
-                    <TextField
-                        label="Team A ID"
-                        fullWidth
-                        margin="dense"
-                        value={teamAId}
-                        onChange={(e) => setTeamAId(e.target.value)}
+
+                    <Autocomplete
+                        options={filteredTeams}
+                        loading={loadingTeams}
+                        getOptionLabel={(option) => option.name || ""}
+                        value={filteredTeams.find((t) => t.id === Number(teamAId)) || null}
+                        onChange={(_, v) => setTeamAId(v ? String(v.id) : "")}
+                        disabled={!competitionId}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                label="Team A"
+                                margin="dense"
+                                InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                        <>
+                                            {loadingTeams ? <CircularProgress size={16} /> : null}
+                                            {params.InputProps.endAdornment}
+                                        </>
+                                    ),
+                                }}
+                            />
+                        )}
                     />
-                    <TextField
-                        label="Team B ID"
-                        fullWidth
-                        margin="dense"
-                        value={teamBId}
-                        onChange={(e) => setTeamBId(e.target.value)}
+
+                    <Autocomplete
+                        options={filteredTeams}
+                        loading={loadingTeams}
+                        getOptionLabel={(option) => option.name || ""}
+                        value={filteredTeams.find((t) => t.id === Number(teamBId)) || null}
+                        onChange={(_, v) => setTeamBId(v ? String(v.id) : "")}
+                        disabled={!competitionId}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                label="Team B"
+                                margin="dense"
+                                InputProps={{
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                        <>
+                                            {loadingTeams ? <CircularProgress size={16} /> : null}
+                                            {params.InputProps.endAdornment}
+                                        </>
+                                    ),
+                                }}
+                            />
+                        )}
                     />
 
                     <FormControl fullWidth margin="dense">
                         <InputLabel>Status</InputLabel>
-                        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                        <Select
+                            label="Status"
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value)}
+                        >
                             <MenuItem value="prematch">prematch</MenuItem>
                             <MenuItem value="live">live</MenuItem>
                             <MenuItem value="finished">finished</MenuItem>
                         </Select>
                     </FormControl>
+
+                    {formError && (
+                        <div style={{ color: "red", fontSize: 13 }}>{formError}</div>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setOpen(false)}>Cancel</Button>
                     <Button
                         onClick={() => createMutation.mutate()}
                         variant="contained"
-                        disabled={createMutation.isPending}
+                        disabled={isCreateDisabled || createMutation.isPending}
                     >
                         Create
                     </Button>
