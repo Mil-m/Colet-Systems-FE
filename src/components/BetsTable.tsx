@@ -22,6 +22,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { Bet } from "../types";
+import "../App.css";
 
 const LIMIT = 10;
 
@@ -51,13 +52,30 @@ interface EventItem {
     sport?: string;
 }
 
+function formatOdds(value: string | number | null | undefined) {
+    if (value === null || value === undefined) return "—";
+    const num = typeof value === "number" ? value : Number(value);
+    if (Number.isNaN(num)) return String(value);
+    return num.toFixed(2);
+}
+
+function formatAmount(value: string | number | null | undefined) {
+    if (value === null || value === undefined) return "—";
+    const num = typeof value === "number" ? value : Number(value);
+    if (Number.isNaN(num)) return String(value);
+    return num.toFixed(2);
+}
+
 export const BetsTable: React.FC = () => {
     const queryClient = useQueryClient();
+
     const [status, setStatus] = useState<string>("");
     const [search, setSearch] = useState<string>("");
     const [page, setPage] = useState<number>(1);
+
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
+
     const [viewBet, setViewBet] = useState<Bet | null>(null);
     const [editBet, setEditBet] = useState<Bet | null>(null);
     const [editStatus, setEditStatus] = useState<string>("");
@@ -78,7 +96,12 @@ export const BetsTable: React.FC = () => {
         queryFn: async () => {
             const offset = (page - 1) * LIMIT;
             const res = await api.get<BetsResponse>("/bets/", {
-                params: { status: status || undefined, search: search || undefined, limit: LIMIT, offset },
+                params: {
+                    status: status || undefined,
+                    search: search || undefined,
+                    limit: LIMIT,
+                    offset,
+                },
             });
             return res.data;
         },
@@ -99,9 +122,15 @@ export const BetsTable: React.FC = () => {
         queryFn: async () => (await api.get("/events/")).data,
     });
 
-    const bookies: Bookie[] = Array.isArray(bookiesRaw) ? bookiesRaw : bookiesRaw?.items || [];
-    const customers: Customer[] = Array.isArray(customersRaw) ? customersRaw : customersRaw?.items || [];
-    const events: EventItem[] = Array.isArray(eventsRaw) ? eventsRaw : eventsRaw?.items || [];
+    const bookies: Bookie[] = Array.isArray(bookiesRaw)
+        ? bookiesRaw
+        : bookiesRaw?.items || [];
+    const customers: Customer[] = Array.isArray(customersRaw)
+        ? customersRaw
+        : customersRaw?.items || [];
+    const events: EventItem[] = Array.isArray(eventsRaw)
+        ? eventsRaw
+        : eventsRaw?.items || [];
 
     const customerOptions =
         customers.map((c) => ({
@@ -124,7 +153,11 @@ export const BetsTable: React.FC = () => {
 
     const totalPages = data ? Math.ceil(data.total / LIMIT) : 1;
 
-    const handleOpen = () => {
+    const handleChange = (field: string, value: string) => {
+        setForm((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleOpenCreate = () => {
         setForm({
             bookie: "",
             customer_id: "",
@@ -135,12 +168,6 @@ export const BetsTable: React.FC = () => {
             odds: "",
         });
         setOpen(true);
-    };
-
-    const handleClose = () => setOpen(false);
-
-    const handleChange = (field: string, value: string) => {
-        setForm((prev) => ({ ...prev, [field]: value }));
     };
 
     const handleCreate = async () => {
@@ -181,24 +208,39 @@ export const BetsTable: React.FC = () => {
         }
     };
 
-    const selectedBookie = form.bookie ? bookieOptions.find((b) => b.value === form.bookie) ?? null : null;
+    const selectedBookie = form.bookie
+        ? bookieOptions.find((b) => b.value === form.bookie) ?? null
+        : null;
 
     return (
-        <div style={{ padding: 24 }}>
-            <h2>Bets</h2>
-            <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-                <TextField label="Search" size="small" value={search} onChange={(e) => setSearch(e.target.value)} />
-                <Select size="small" value={status} onChange={(e) => setStatus(e.target.value)} displayEmpty>
+        <div className="admin-page">
+            <h2 className="admin-title">Bets</h2>
+
+            <div className="admin-toolbar">
+                <TextField
+                    label="Search"
+                    size="small"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="admin-search"
+                />
+                <Select
+                    size="small"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    displayEmpty
+                    sx={{ minWidth: 160 }}
+                >
                     <MenuItem value="">All statuses</MenuItem>
                     <MenuItem value="placed">Placed</MenuItem>
                     <MenuItem value="failed">Failed</MenuItem>
                 </Select>
-                <Button variant="outlined" onClick={handleOpen}>
+                <Button variant="outlined" onClick={handleOpenCreate}>
                     ADD BET
                 </Button>
             </div>
 
-            <Table>
+            <Table className="admin-table">
                 <TableHead>
                     <TableRow>
                         <TableCell>Bookie</TableCell>
@@ -218,46 +260,72 @@ export const BetsTable: React.FC = () => {
                                 <TableCell>{bet.bookie}</TableCell>
                                 <TableCell>{bet.customer_name || bet.customer_id}</TableCell>
                                 <TableCell>{bet.sport}</TableCell>
-                                <TableCell>{bet.odds}</TableCell>
+                                <TableCell>{formatOdds(bet.odds)}</TableCell>
                                 <TableCell>
-                                    {bet.stake_amount} {bet.stake_currency}
+                                    {formatAmount(bet.stake_amount)} {bet.stake_currency}
                                 </TableCell>
                                 <TableCell>{bet.placement_status}</TableCell>
                                 <TableCell>
                                     {bet.created_at ? new Date(bet.created_at).toLocaleString() : "-"}
                                 </TableCell>
                                 <TableCell>
-                                    <Button size="small" onClick={() => setViewBet(bet)}>
-                                        VIEW
-                                    </Button>
-                                    <Button
-                                        size="small"
-                                        onClick={() => {
-                                            setEditBet(bet);
-                                            setEditStatus(bet.placement_status || "");
-                                            setEditOutcome(bet.outcome || "");
-                                        }}
-                                    >
-                                        EDIT
-                                    </Button>
-                                    <Button size="small" color="error" onClick={() => handleDelete(bet.id)}>
-                                        DELETE
-                                    </Button>
+                                    <div className="admin-actions">
+                                        <Button
+                                            size="small"
+                                            className="admin-action admin-action--primary"
+                                            onClick={() => setViewBet(bet)}
+                                        >
+                                            VIEW
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            className="admin-action admin-action--primary"
+                                            onClick={() => {
+                                                setEditBet(bet);
+                                                setEditStatus(bet.placement_status || "");
+                                                setEditOutcome(bet.outcome || "");
+                                            }}
+                                        >
+                                            EDIT
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            className="admin-action admin-action--danger"
+                                            onClick={() => handleDelete(bet.id)}
+                                        >
+                                            DELETE
+                                        </Button>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         ))}
+
+                    {!isLoading && (!data || data.items.length === 0) && (
+                        <TableRow>
+                            <TableCell colSpan={8}>No bets</TableCell>
+                        </TableRow>
+                    )}
                 </TableBody>
             </Table>
 
-            <Pagination sx={{ marginTop: 2 }} count={totalPages} page={page} onChange={(_, p) => setPage(p)} />
+            <Pagination
+                className="admin-pagination"
+                count={totalPages}
+                page={page}
+                onChange={(_, p) => setPage(p)}
+            />
 
-            <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+            <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
                 <DialogTitle>Add bet</DialogTitle>
                 <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
                     <Autocomplete
                         options={customerOptions}
                         loading={loadingCustomers}
-                        value={form.customer_id ? customerOptions.find((c) => c.value === form.customer_id) ?? null : null}
+                        value={
+                            form.customer_id
+                                ? customerOptions.find((c) => c.value === form.customer_id) ?? null
+                                : null
+                        }
                         onChange={(_, v) => handleChange("customer_id", v ? v.value : "")}
                         renderInput={(params) => (
                             <TextField
@@ -281,7 +349,11 @@ export const BetsTable: React.FC = () => {
                         options={eventOptions}
                         loading={loadingEvents}
                         getOptionDisabled={(option) => option.disabled}
-                        value={form.event_id ? eventOptions.find((e) => e.value === form.event_id) ?? null : null}
+                        value={
+                            form.event_id
+                                ? eventOptions.find((e) => e.value === form.event_id) ?? null
+                                : null
+                        }
                         onChange={(_, v) => handleChange("event_id", v ? v.value : "")}
                         renderInput={(params) => (
                             <TextField
@@ -368,7 +440,7 @@ export const BetsTable: React.FC = () => {
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={handleClose} disabled={saving}>
+                    <Button onClick={() => setOpen(false)} disabled={saving}>
                         Cancel
                     </Button>
                     <Button onClick={handleCreate} variant="contained" disabled={saving}>
@@ -395,10 +467,11 @@ export const BetsTable: React.FC = () => {
                                 <b>Sport:</b> {viewBet.sport}
                             </div>
                             <div>
-                                <b>Odds:</b> {viewBet.odds}
+                                <b>Odds:</b> {formatOdds(viewBet.odds)}
                             </div>
                             <div>
-                                <b>Stake:</b> {viewBet.stake_amount} {viewBet.stake_currency}
+                                <b>Stake:</b>{" "}
+                                {formatAmount(viewBet.stake_amount)} {viewBet.stake_currency}
                             </div>
                             <div>
                                 <b>Status:</b> {viewBet.placement_status}
@@ -407,7 +480,10 @@ export const BetsTable: React.FC = () => {
                                 <b>Outcome:</b> {viewBet.outcome || "—"}
                             </div>
                             <div>
-                                <b>Date:</b> {viewBet.created_at ? new Date(viewBet.created_at).toLocaleString() : "-"}
+                                <b>Date:</b>{" "}
+                                {viewBet.created_at
+                                    ? new Date(viewBet.created_at).toLocaleString()
+                                    : "-"}
                             </div>
                         </div>
                     )}
@@ -417,19 +493,28 @@ export const BetsTable: React.FC = () => {
                 </DialogActions>
             </Dialog>
 
+            {/* edit bet */}
             <Dialog open={!!editBet} onClose={() => setEditBet(null)} maxWidth="sm" fullWidth>
                 <DialogTitle>Edit bet</DialogTitle>
                 <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
                     <FormControl>
                         <InputLabel>Status</InputLabel>
-                        <Select value={editStatus} label="Status" onChange={(e) => setEditStatus(e.target.value)}>
+                        <Select
+                            value={editStatus}
+                            label="Status"
+                            onChange={(e) => setEditStatus(e.target.value)}
+                        >
                             <MenuItem value="placed">placed</MenuItem>
                             <MenuItem value="failed">failed</MenuItem>
                         </Select>
                     </FormControl>
                     <FormControl>
                         <InputLabel>Outcome</InputLabel>
-                        <Select value={editOutcome} label="Outcome" onChange={(e) => setEditOutcome(e.target.value)}>
+                        <Select
+                            value={editOutcome}
+                            label="Outcome"
+                            onChange={(e) => setEditOutcome(e.target.value)}
+                        >
                             <MenuItem value="">—</MenuItem>
                             <MenuItem value="win">win</MenuItem>
                             <MenuItem value="lose">lose</MenuItem>

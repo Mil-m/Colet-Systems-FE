@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import "../App.css";
 
 interface Bookie {
     name: string;
@@ -23,7 +24,7 @@ interface Bookie {
 export const BookiesTable: React.FC = () => {
     const queryClient = useQueryClient();
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, error } = useQuery({
         queryKey: ["bookies"],
         queryFn: async () => {
             const res = await api.get<Bookie[]>("/bookies/");
@@ -67,27 +68,30 @@ export const BookiesTable: React.FC = () => {
     }, [data, search]);
 
     return (
-        <div style={{ padding: 24 }}>
-            <h2>Bookies</h2>
+        <div className="admin-page">
+            <h2 className="admin-title">Bookies</h2>
 
-            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            <div className="admin-toolbar">
                 <TextField
                     size="small"
                     label="Search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    className="admin-search"
                 />
-                <Button variant="contained" onClick={() => setOpen(true)}>
-                    Add bookie
+                <Button variant="outlined" onClick={() => setOpen(true)}>
+                    ADD BOOKIE
                 </Button>
             </div>
 
-            <Table>
+            {error && <div style={{ color: "red", marginBottom: 12 }}>Failed to load bookies</div>}
+
+            <Table className="admin-table">
                 <TableHead>
                     <TableRow>
-                        <TableCell>Name</TableCell>
+                        <TableCell>Bookie</TableCell>
                         <TableCell>Description</TableCell>
-                        <TableCell>Actions</TableCell>
+                        <TableCell width={160}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -102,13 +106,15 @@ export const BookiesTable: React.FC = () => {
                                 <TableCell>{b.name}</TableCell>
                                 <TableCell>{b.description}</TableCell>
                                 <TableCell>
-                                    <Button
-                                        color="error"
-                                        size="small"
-                                        onClick={() => handleDelete(b.name)}
-                                    >
-                                        DELETE
-                                    </Button>
+                                    <div className="admin-actions">
+                                        <Button
+                                            size="small"
+                                            className="admin-action admin-action--danger"
+                                            onClick={() => handleDelete(b.name)}
+                                        >
+                                            DELETE
+                                        </Button>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -140,7 +146,11 @@ export const BookiesTable: React.FC = () => {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button onClick={() => createMutation.mutate()} variant="contained">
+                    <Button
+                        onClick={() => createMutation.mutate()}
+                        variant="contained"
+                        disabled={createMutation.isPending || !name.trim()}
+                    >
                         Create
                     </Button>
                 </DialogActions>

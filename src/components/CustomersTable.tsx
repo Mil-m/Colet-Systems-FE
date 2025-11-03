@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import "../App.css";
 
 interface Customer {
     id: number;
@@ -41,7 +42,7 @@ interface BalanceChange {
 export const CustomersTable: React.FC = () => {
     const queryClient = useQueryClient();
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, error } = useQuery({
         queryKey: ["customers"],
         queryFn: async () => {
             const res = await api.get<Customer[]>("/customers/");
@@ -76,18 +77,6 @@ export const CustomersTable: React.FC = () => {
             setRealName("");
             setCurrency("USD");
             setBalance("0");
-        },
-        onError: (err: any) => {
-            const backendDetail =
-                err?.response?.data?.detail ??
-                err?.response?.data?.message ??
-                err?.message ??
-                "Failed to create customer";
-            if (typeof backendDetail === "string") {
-                alert(backendDetail);
-            } else {
-                alert(JSON.stringify(backendDetail, null, 2));
-            }
         },
     });
 
@@ -127,22 +116,25 @@ export const CustomersTable: React.FC = () => {
     }, [data, search]);
 
     return (
-        <div style={{ padding: 24 }}>
-            <h2>Customers</h2>
+        <div className="admin-page">
+            <h2 className="admin-title">Customers</h2>
 
-            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            <div className="admin-toolbar">
                 <TextField
                     size="small"
                     label="Search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    className="admin-search"
                 />
-                <Button variant="contained" onClick={() => setOpen(true)}>
-                    Add customer
+                <Button variant="outlined" onClick={() => setOpen(true)}>
+                    ADD CUSTOMER
                 </Button>
             </div>
 
-            <Table>
+            {error && <div style={{ color: "red", marginBottom: 12 }}>Failed to load customers</div>}
+
+            <Table className="admin-table">
                 <TableHead>
                     <TableRow>
                         <TableCell>ID</TableCell>
@@ -150,7 +142,7 @@ export const CustomersTable: React.FC = () => {
                         <TableCell>Real name</TableCell>
                         <TableCell>Currency</TableCell>
                         <TableCell>Balance</TableCell>
-                        <TableCell>Actions</TableCell>
+                        <TableCell width={180}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -169,12 +161,22 @@ export const CustomersTable: React.FC = () => {
                                 <TableCell>{c.currency}</TableCell>
                                 <TableCell>{c.balance_amount}</TableCell>
                                 <TableCell>
-                                    <Button size="small" onClick={() => handleViewHistory(c)}>
-                                        VIEW
-                                    </Button>
-                                    <Button size="small" color="error" onClick={() => handleDelete(c.id)}>
-                                        DELETE
-                                    </Button>
+                                    <div className="admin-actions">
+                                        <Button
+                                            size="small"
+                                            className="admin-action admin-action--primary"
+                                            onClick={() => handleViewHistory(c)}
+                                        >
+                                            VIEW
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            className="admin-action admin-action--danger"
+                                            onClick={() => handleDelete(c.id)}
+                                        >
+                                            DELETE
+                                        </Button>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         ))}

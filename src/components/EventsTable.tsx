@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import "../App.css";
 
 interface EventItem {
     id: number;
@@ -36,7 +37,7 @@ interface EventsResponse {
 export const EventsTable: React.FC = () => {
     const queryClient = useQueryClient();
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, error } = useQuery({
         queryKey: ["events"],
         queryFn: async () => {
             const res = await api.get<EventsResponse>("/events/");
@@ -72,6 +73,16 @@ export const EventsTable: React.FC = () => {
         },
     });
 
+    const handleDelete = async (id: number) => {
+        if (!window.confirm("Delete event?")) return;
+        try {
+            await api.delete(`/events/${id}`);
+            queryClient.invalidateQueries({ queryKey: ["events"] });
+        } catch (err: any) {
+            alert(err?.response?.data?.detail || "Delete failed");
+        }
+    };
+
     const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
         if (!q) return data?.items || [];
@@ -92,22 +103,25 @@ export const EventsTable: React.FC = () => {
     }, [data, search]);
 
     return (
-        <div style={{ padding: 24 }}>
-            <h2>Events</h2>
+        <div className="admin-page">
+            <h2 className="admin-title">Events</h2>
 
-            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            <div className="admin-toolbar">
                 <TextField
                     size="small"
                     label="Search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    className="admin-search"
                 />
-                <Button variant="contained" onClick={() => setOpen(true)}>
-                    Add event
+                <Button variant="outlined" onClick={() => setOpen(true)}>
+                    ADD EVENT
                 </Button>
             </div>
 
-            <Table>
+            {error && <div style={{ color: "red", marginBottom: 12 }}>Failed to load events</div>}
+
+            <Table className="admin-table">
                 <TableHead>
                     <TableRow>
                         <TableCell>ID</TableCell>
@@ -116,12 +130,13 @@ export const EventsTable: React.FC = () => {
                         <TableCell>Team A ID</TableCell>
                         <TableCell>Team B ID</TableCell>
                         <TableCell>Status</TableCell>
+                        <TableCell width={100}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {isLoading && (
                         <TableRow>
-                            <TableCell colSpan={6}>Loading...</TableCell>
+                            <TableCell colSpan={7}>Loading...</TableCell>
                         </TableRow>
                     )}
 
@@ -134,12 +149,23 @@ export const EventsTable: React.FC = () => {
                                 <TableCell>{ev.team_a_id}</TableCell>
                                 <TableCell>{ev.team_b_id}</TableCell>
                                 <TableCell>{ev.status}</TableCell>
+                                <TableCell>
+                                    <div className="admin-actions">
+                                        <Button
+                                            size="small"
+                                            className="admin-action admin-action--danger"
+                                            onClick={() => handleDelete(ev.id)}
+                                        >
+                                            DELETE
+                                        </Button>
+                                    </div>
+                                </TableCell>
                             </TableRow>
                         ))}
 
                     {!isLoading && filtered.length === 0 && (
                         <TableRow>
-                            <TableCell colSpan={6}>No events</TableCell>
+                            <TableCell colSpan={7}>No events</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
@@ -181,11 +207,7 @@ export const EventsTable: React.FC = () => {
 
                     <FormControl fullWidth margin="dense">
                         <InputLabel>Status</InputLabel>
-                        <Select
-                            label="Status"
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value)}
-                        >
+                        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
                             <MenuItem value="prematch">prematch</MenuItem>
                             <MenuItem value="live">live</MenuItem>
                             <MenuItem value="finished">finished</MenuItem>
