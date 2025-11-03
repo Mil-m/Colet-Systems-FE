@@ -6,6 +6,8 @@ A lightweight **React + TypeScript + Vite** application for managing sports bett
 
 ## Install dependencies
 ```bash
+nvm install 20.19.0
+nvm use 20
 npm install
 ```
 
