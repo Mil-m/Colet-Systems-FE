@@ -19,7 +19,7 @@ import {
     Autocomplete,
     CircularProgress,
 } from "@mui/material";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { Bet } from "../types";
 
@@ -52,6 +52,7 @@ interface EventItem {
 }
 
 export const BetsTable: React.FC = () => {
+    const queryClient = useQueryClient();
     const [status, setStatus] = useState<string>("");
     const [search, setSearch] = useState<string>("");
     const [page, setPage] = useState<number>(1);
@@ -161,6 +162,7 @@ export const BetsTable: React.FC = () => {
             setOpen(false);
             setPage(1);
             refetch();
+            queryClient.invalidateQueries({ queryKey: ["customers"] });
         } catch (err: any) {
             alert(err?.response?.data?.detail || "Server error");
         } finally {
@@ -173,6 +175,7 @@ export const BetsTable: React.FC = () => {
         try {
             await api.delete(`/bets/${id}`);
             refetch();
+            queryClient.invalidateQueries({ queryKey: ["customers"] });
         } catch (err: any) {
             alert(err?.response?.data?.detail || "Delete failed");
         }
@@ -404,8 +407,7 @@ export const BetsTable: React.FC = () => {
                                 <b>Outcome:</b> {viewBet.outcome || "—"}
                             </div>
                             <div>
-                                <b>Date:</b>{" "}
-                                {viewBet.created_at ? new Date(viewBet.created_at).toLocaleString() : "-"}
+                                <b>Date:</b> {viewBet.created_at ? new Date(viewBet.created_at).toLocaleString() : "-"}
                             </div>
                         </div>
                     )}

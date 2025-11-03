@@ -15,6 +15,7 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    CircularProgress,
 } from "@mui/material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
@@ -25,6 +26,16 @@ interface Customer {
     real_name?: string | null;
     currency: string;
     balance_amount: number;
+}
+
+interface BalanceChange {
+    id: number;
+    change_type: string;
+    delta_amount: number;
+    delta_currency: string;
+    reference_id: string | null;
+    description: string | null;
+    created_at: string;
 }
 
 export const CustomersTable: React.FC = () => {
@@ -43,6 +54,11 @@ export const CustomersTable: React.FC = () => {
     const [realName, setRealName] = useState("");
     const [currency, setCurrency] = useState("USD");
     const [balance, setBalance] = useState("0");
+
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyData, setHistoryData] = useState<BalanceChange[]>([]);
+    const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
 
     const createMutation = useMutation({
         mutationFn: async () =>
@@ -84,6 +100,21 @@ export const CustomersTable: React.FC = () => {
         }
     };
 
+    const handleViewHistory = async (customer: Customer) => {
+        setHistoryCustomer(customer);
+        setHistoryOpen(true);
+        setHistoryLoading(true);
+        try {
+            const res = await api.get<BalanceChange[]>(`/customers/${customer.id}/balance-changes`);
+            setHistoryData(res.data);
+        } catch (err: any) {
+            setHistoryData([]);
+            alert(err?.response?.data?.detail || "Failed to load history");
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
     return (
         <div style={{ padding: 24 }}>
             <h2>Customers</h2>
@@ -119,6 +150,9 @@ export const CustomersTable: React.FC = () => {
                                 <TableCell>{c.currency}</TableCell>
                                 <TableCell>{c.balance_amount}</TableCell>
                                 <TableCell>
+                                    <Button size="small" onClick={() => handleViewHistory(c)}>
+                                        VIEW
+                                    </Button>
                                     <Button size="small" color="error" onClick={() => handleDelete(c.id)}>
                                         DELETE
                                     </Button>
@@ -177,6 +211,50 @@ export const CustomersTable: React.FC = () => {
                     >
                         Create
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    Balance history {historyCustomer ? `for ${historyCustomer.username}` : ""}
+                </DialogTitle>
+                <DialogContent dividers>
+                    {historyLoading && <CircularProgress size={24} />}
+                    {!historyLoading && historyData.length === 0 && <div>No balance changes</div>}
+                    {!historyLoading &&
+                        historyData.length > 0 && (
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>ID</TableCell>
+                                        <TableCell>Type</TableCell>
+                                        <TableCell>Delta</TableCell>
+                                        <TableCell>Reference</TableCell>
+                                        <TableCell>Description</TableCell>
+                                        <TableCell>Date</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {historyData.map((h) => (
+                                        <TableRow key={h.id}>
+                                            <TableCell>{h.id}</TableCell>
+                                            <TableCell>{h.change_type}</TableCell>
+                                            <TableCell>
+                                                {h.delta_amount} {h.delta_currency}
+                                            </TableCell>
+                                            <TableCell>{h.reference_id || "—"}</TableCell>
+                                            <TableCell>{h.description || "—"}</TableCell>
+                                            <TableCell>
+                                                {h.created_at ? new Date(h.created_at).toLocaleString() : "—"}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setHistoryOpen(false)}>Close</Button>
                 </DialogActions>
             </Dialog>
         </div>
