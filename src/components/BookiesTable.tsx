@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
     Table,
     TableHead,
@@ -31,6 +31,7 @@ export const BookiesTable: React.FC = () => {
         },
     });
 
+    const [search, setSearch] = useState("");
     const [open, setOpen] = useState(false);
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
@@ -55,15 +56,33 @@ export const BookiesTable: React.FC = () => {
         }
     };
 
+    const filtered = useMemo(() => {
+        const q = search.toLowerCase().trim();
+        if (!q) return data || [];
+        return (data || []).filter(
+            (b) =>
+                b.name.toLowerCase().includes(q) ||
+                b.description.toLowerCase().includes(q)
+        );
+    }, [data, search]);
+
     return (
         <div style={{ padding: 24 }}>
             <h2>Bookies</h2>
 
-            <Button variant="contained" onClick={() => setOpen(true)}>
-                Add bookie
-            </Button>
+            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+                <TextField
+                    size="small"
+                    label="Search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                <Button variant="contained" onClick={() => setOpen(true)}>
+                    Add bookie
+                </Button>
+            </div>
 
-            <Table sx={{ marginTop: 2 }}>
+            <Table>
                 <TableHead>
                     <TableRow>
                         <TableCell>Name</TableCell>
@@ -78,17 +97,26 @@ export const BookiesTable: React.FC = () => {
                         </TableRow>
                     )}
                     {!isLoading &&
-                        data?.map((b) => (
+                        filtered.map((b) => (
                             <TableRow key={b.name}>
                                 <TableCell>{b.name}</TableCell>
                                 <TableCell>{b.description}</TableCell>
                                 <TableCell>
-                                    <Button color="error" size="small" onClick={() => handleDelete(b.name)}>
+                                    <Button
+                                        color="error"
+                                        size="small"
+                                        onClick={() => handleDelete(b.name)}
+                                    >
                                         DELETE
                                     </Button>
                                 </TableCell>
                             </TableRow>
                         ))}
+                    {!isLoading && filtered.length === 0 && (
+                        <TableRow>
+                            <TableCell colSpan={3}>No bookies</TableCell>
+                        </TableRow>
+                    )}
                 </TableBody>
             </Table>
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
     Table,
     TableHead,
@@ -49,6 +49,7 @@ export const CustomersTable: React.FC = () => {
         },
     });
 
+    const [search, setSearch] = useState("");
     const [open, setOpen] = useState(false);
     const [username, setUsername] = useState("");
     const [realName, setRealName] = useState("");
@@ -115,15 +116,33 @@ export const CustomersTable: React.FC = () => {
         }
     };
 
+    const filtered = useMemo(() => {
+        const q = search.toLowerCase().trim();
+        if (!q) return data || [];
+        return (data || []).filter((c) => {
+            const u = c.username.toLowerCase();
+            const r = (c.real_name || "").toLowerCase();
+            return u.includes(q) || r.includes(q);
+        });
+    }, [data, search]);
+
     return (
         <div style={{ padding: 24 }}>
             <h2>Customers</h2>
 
-            <Button variant="contained" onClick={() => setOpen(true)}>
-                Add customer
-            </Button>
+            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+                <TextField
+                    size="small"
+                    label="Search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                <Button variant="contained" onClick={() => setOpen(true)}>
+                    Add customer
+                </Button>
+            </div>
 
-            <Table sx={{ marginTop: 2 }}>
+            <Table>
                 <TableHead>
                     <TableRow>
                         <TableCell>ID</TableCell>
@@ -142,7 +161,7 @@ export const CustomersTable: React.FC = () => {
                     )}
 
                     {!isLoading &&
-                        data?.map((c) => (
+                        filtered.map((c) => (
                             <TableRow key={c.id}>
                                 <TableCell>{c.id}</TableCell>
                                 <TableCell>{c.username}</TableCell>
@@ -160,7 +179,7 @@ export const CustomersTable: React.FC = () => {
                             </TableRow>
                         ))}
 
-                    {!isLoading && data && data.length === 0 && (
+                    {!isLoading && filtered.length === 0 && (
                         <TableRow>
                             <TableCell colSpan={6}>No customers</TableCell>
                         </TableRow>
@@ -221,37 +240,36 @@ export const CustomersTable: React.FC = () => {
                 <DialogContent dividers>
                     {historyLoading && <CircularProgress size={24} />}
                     {!historyLoading && historyData.length === 0 && <div>No balance changes</div>}
-                    {!historyLoading &&
-                        historyData.length > 0 && (
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>ID</TableCell>
-                                        <TableCell>Type</TableCell>
-                                        <TableCell>Delta</TableCell>
-                                        <TableCell>Reference</TableCell>
-                                        <TableCell>Description</TableCell>
-                                        <TableCell>Date</TableCell>
+                    {!historyLoading && historyData.length > 0 && (
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>ID</TableCell>
+                                    <TableCell>Type</TableCell>
+                                    <TableCell>Delta</TableCell>
+                                    <TableCell>Reference</TableCell>
+                                    <TableCell>Description</TableCell>
+                                    <TableCell>Date</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {historyData.map((h) => (
+                                    <TableRow key={h.id}>
+                                        <TableCell>{h.id}</TableCell>
+                                        <TableCell>{h.change_type}</TableCell>
+                                        <TableCell>
+                                            {h.delta_amount} {h.delta_currency}
+                                        </TableCell>
+                                        <TableCell>{h.reference_id || "—"}</TableCell>
+                                        <TableCell>{h.description || "—"}</TableCell>
+                                        <TableCell>
+                                            {h.created_at ? new Date(h.created_at).toLocaleString() : "—"}
+                                        </TableCell>
                                     </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {historyData.map((h) => (
-                                        <TableRow key={h.id}>
-                                            <TableCell>{h.id}</TableCell>
-                                            <TableCell>{h.change_type}</TableCell>
-                                            <TableCell>
-                                                {h.delta_amount} {h.delta_currency}
-                                            </TableCell>
-                                            <TableCell>{h.reference_id || "—"}</TableCell>
-                                            <TableCell>{h.description || "—"}</TableCell>
-                                            <TableCell>
-                                                {h.created_at ? new Date(h.created_at).toLocaleString() : "—"}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        )}
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setHistoryOpen(false)}>Close</Button>

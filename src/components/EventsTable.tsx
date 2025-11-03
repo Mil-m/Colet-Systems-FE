@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
     Table,
     TableHead,
@@ -44,10 +44,9 @@ export const EventsTable: React.FC = () => {
         },
     });
 
+    const [search, setSearch] = useState("");
     const [open, setOpen] = useState(false);
-    const [date, setDate] = useState(
-        new Date().toISOString().slice(0, 16)
-    );
+    const [date, setDate] = useState(new Date().toISOString().slice(0, 16));
     const [competitionId, setCompetitionId] = useState("");
     const [teamAId, setTeamAId] = useState("");
     const [teamBId, setTeamBId] = useState("");
@@ -73,15 +72,42 @@ export const EventsTable: React.FC = () => {
         },
     });
 
+    const filtered = useMemo(() => {
+        const q = search.toLowerCase().trim();
+        if (!q) return data?.items || [];
+        return (data?.items || []).filter((ev) => {
+            const idStr = String(ev.id);
+            const compStr = String(ev.competition_id);
+            const teamAStr = String(ev.team_a_id);
+            const teamBStr = String(ev.team_b_id);
+            const statusStr = ev.status.toLowerCase();
+            return (
+                idStr.includes(q) ||
+                compStr.includes(q) ||
+                teamAStr.includes(q) ||
+                teamBStr.includes(q) ||
+                statusStr.includes(q)
+            );
+        });
+    }, [data, search]);
+
     return (
         <div style={{ padding: 24 }}>
             <h2>Events</h2>
 
-            <Button variant="contained" onClick={() => setOpen(true)}>
-                Add event
-            </Button>
+            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+                <TextField
+                    size="small"
+                    label="Search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                <Button variant="contained" onClick={() => setOpen(true)}>
+                    Add event
+                </Button>
+            </div>
 
-            <Table sx={{ marginTop: 2 }}>
+            <Table>
                 <TableHead>
                     <TableRow>
                         <TableCell>ID</TableCell>
@@ -100,7 +126,7 @@ export const EventsTable: React.FC = () => {
                     )}
 
                     {!isLoading &&
-                        data?.items?.map((ev) => (
+                        filtered.map((ev) => (
                             <TableRow key={ev.id}>
                                 <TableCell>{ev.id}</TableCell>
                                 <TableCell>{new Date(ev.date).toLocaleString()}</TableCell>
@@ -111,7 +137,7 @@ export const EventsTable: React.FC = () => {
                             </TableRow>
                         ))}
 
-                    {!isLoading && data && data.items.length === 0 && (
+                    {!isLoading && filtered.length === 0 && (
                         <TableRow>
                             <TableCell colSpan={6}>No events</TableCell>
                         </TableRow>
